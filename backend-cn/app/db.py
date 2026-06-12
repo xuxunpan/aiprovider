@@ -1,6 +1,9 @@
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from app.config import settings
+from app.logger import get_logger
+
+logger = get_logger("db")
 
 _client: AsyncIOMotorClient | None = None
 _db: AsyncIOMotorDatabase | None = None
@@ -17,6 +20,7 @@ async def connect_db() -> None:
     _client = AsyncIOMotorClient(settings.mongo_uri)
     _db = _client[settings.mongo_db]
     await _ensure_indexes(_db)
+    logger.info("MongoDB 连接成功: db=%s", settings.mongo_db)
 
 
 async def close_db() -> None:
@@ -24,6 +28,7 @@ async def close_db() -> None:
     if _client is not None:
         _client.close()
         _client = None
+        logger.info("MongoDB 连接已关闭")
 
 
 async def _ensure_indexes(db: AsyncIOMotorDatabase) -> None:

@@ -3,6 +3,10 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.logger import get_logger
+
+logger = get_logger("credit")
+
 
 async def try_reserve_credits(db: AsyncIOMotorDatabase, user_id: ObjectId, cost: int) -> bool:
     """原子预扣积分。余额不足返回 False，不做任何修改。"""
@@ -10,12 +14,18 @@ async def try_reserve_credits(db: AsyncIOMotorDatabase, user_id: ObjectId, cost:
         {"_id": user_id, "credits": {"$gte": cost}},
         {"$inc": {"credits": -cost}},
     )
-    return result is not None
+    ok = result is not None
+    if ok:
+        logger.info("预扣积分成功: user_id=%s cost=%s", user_id, cost)
+    else:
+        logger.warning("预扣积分失败(余额不足): user_id=%s cost=%s", user_id, cost)
+    return ok
 
 
 async def refund_credits(db: AsyncIOMotorDatabase, user_id: ObjectId, cost: int) -> None:
     """退还此前预扣的积分。"""
     await db.users.update_one({"_id": user_id}, {"$inc": {"credits": cost}})
+    logger.info("退还积分: user_id=%s cost=%s", user_id, cost)
 
 
 async def get_credits(db: AsyncIOMotorDatabase, user_id: ObjectId) -> int:

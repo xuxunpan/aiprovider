@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     storage_dir: str = "/storage"
 
+    log_level: str = "INFO"
+
 
 @lru_cache
 def get_settings() -> Settings:

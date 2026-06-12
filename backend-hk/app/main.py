@@ -5,7 +5,13 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
+from app.logger import get_logger, setup_logging
+
+setup_logging(settings.log_level)
+
 from app.routers import generate, images
+
+logger = get_logger("main")
 
 
 class InternalSecretMiddleware(BaseHTTPMiddleware):
@@ -16,6 +22,10 @@ class InternalSecretMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         secret = request.headers.get("X-Internal-Secret")
         if secret != settings.internal_secret:
+            client_ip = request.client.host if request.client else "unknown"
+            logger.warning(
+                "拒绝非法请求(密钥校验失败): ip=%s path=%s", client_ip, request.url.path
+            )
             return JSONResponse(status_code=403, content={"detail": "forbidden"})
         return await call_next(request)
 
@@ -30,6 +40,7 @@ app.include_router(images.router)
 @app.on_event("startup")
 async def _ensure_storage():
     os.makedirs(settings.storage_dir, exist_ok=True)
+    logger.info("香港网关启动完成，存储目录就绪: %s", settings.storage_dir)
 
 
 @app.get("/health")

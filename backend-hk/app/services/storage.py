@@ -2,6 +2,9 @@ import os
 import uuid
 
 from app.config import settings
+from app.logger import get_logger
+
+logger = get_logger("storage")
 
 
 def _user_dir(user_id: str) -> str:
@@ -20,7 +23,9 @@ def save_image(user_id: str, image_bytes: bytes, ext: str = "png") -> str:
     full_path = os.path.join(directory, filename)
     with open(full_path, "wb") as f:
         f.write(image_bytes)
-    return f"{safe_uid}/{filename}"
+    rel_path = f"{safe_uid}/{filename}"
+    logger.info("图片已保存: path=%s 大小=%s 字节", rel_path, len(image_bytes))
+    return rel_path
 
 
 def resolve_path(rel_path: str) -> str | None:
@@ -28,6 +33,7 @@ def resolve_path(rel_path: str) -> str | None:
     root = os.path.abspath(settings.storage_dir)
     full = os.path.abspath(os.path.join(root, rel_path))
     if not full.startswith(root + os.sep):
+        logger.warning("拦截路径穿越尝试: rel_path=%s", rel_path)
         return None
     if not os.path.isfile(full):
         return None
