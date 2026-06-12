@@ -5,9 +5,7 @@ After=network.target mongod.service
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=/opt/aiprovider/backend-cn
-EnvironmentFile=/opt/aiprovider/backend-cn/.env
-ExecStart=/opt/aiprovider/backend-cn/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+ExecStart=/opt/aiprovider/script/start-cn.sh
 Restart=always
 RestartSec=3
 
