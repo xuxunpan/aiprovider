@@ -32,7 +32,7 @@ async def register(payload: RegisterRequest):
 async def login(payload: LoginRequest):
     db = get_db()
     user = await db.users.find_one({"email": payload.email.lower()})
-    if user is None or not verify_password(payload.password, user["password_hash"]):
+    if user is None or not user.get("password_hash") or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="邮箱或密码错误")
 
     token = create_access_token(str(user["_id"]))
