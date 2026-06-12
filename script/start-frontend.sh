@@ -11,5 +11,5 @@ fi
 echo "[build] building frontend..."
 npm run build
 
-echo "[start] frontend preview -> http://0.0.0.0:4173"
-npm run preview -- --host 0.0.0.0
+echo "[start] frontend preview -> http://0.0.0.0:8000"
+npm run preview -- --host 0.0.0.0 --port 8000
