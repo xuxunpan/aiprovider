@@ -1,0 +1,31 @@
+from bson import ObjectId
+from bson.errors import InvalidId
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from app.db import get_db
+from app.security import decode_access_token
+
+_bearer = HTTPBearer(auto_error=False)
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> dict:
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
+
+    user_id = decode_access_token(credentials.credentials)
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已失效，请重新登录")
+
+    try:
+        oid = ObjectId(user_id)
+    except InvalidId:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已失效，请重新登录")
+
+    user = await get_db().users.find_one({"_id": oid})
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="账号不存在")
+
+    return user

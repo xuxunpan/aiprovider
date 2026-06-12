@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv-*/
+.env
+
+# Node
+node_modules/
+dist/
+
+# 香港图片存储
+backend-hk/storage/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
