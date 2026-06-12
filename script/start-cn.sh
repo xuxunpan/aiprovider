@@ -22,5 +22,12 @@ if [ ! -f ".env" ]; then
     fi
 fi
 
-echo "[start] backend-cn -> http://0.0.0.0:8000"
-.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+set -a
+. .env
+set +a
+
+HOST="${APP_HOST:-0.0.0.0}"
+PORT="${APP_PORT:-8000}"
+
+echo "[start] backend-cn -> http://$HOST:$PORT"
+.venv/bin/python -m uvicorn app.main:app --host "$HOST" --port "$PORT"
