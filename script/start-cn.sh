@@ -1,19 +1,20 @@
 #!/bin/bash
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR/../backend-cn"
+APP_DIR="$SCRIPT_DIR/../backend-cn"
+cd "$APP_DIR"
 
-if [ ! -d ".venv" ]; then
+if [ ! -d "$APP_DIR/.venv" ]; then
     echo "[init] creating virtual environment..."
-    python3.11 -m venv .venv || python3 -m venv .venv
+    python3.11 -m venv "$APP_DIR/.venv" || python3 -m venv "$APP_DIR/.venv"
     echo "[init] installing dependencies..."
-    .venv/bin/python -m pip install -q -r requirements.txt
+    "$APP_DIR/.venv/bin/python" -m pip install -q -r "$APP_DIR/requirements.txt"
 fi
 
-if [ ! -f ".env" ]; then
-    if [ -f ".env.example" ]; then
+if [ ! -f "$APP_DIR/.env" ]; then
+    if [ -f "$APP_DIR/.env.example" ]; then
         echo "[init] copying .env.example to .env"
-        cp .env.example .env
+        cp "$APP_DIR/.env.example" "$APP_DIR/.env"
         echo "[warn] please edit .env and fill in MONGO_URI and other configs"
         exit 0
     else
@@ -23,11 +24,11 @@ if [ ! -f ".env" ]; then
 fi
 
 set -a
-. .env
+. "$APP_DIR/.env"
 set +a
 
 HOST="${APP_HOST:-0.0.0.0}"
 PORT="${APP_PORT:-8000}"
 
 echo "[start] backend-cn -> http://$HOST:$PORT"
-.venv/bin/python -m uvicorn app.main:app --host "$HOST" --port "$PORT"
+"$APP_DIR/.venv/bin/python" -m uvicorn app.main:app --host "$HOST" --port "$PORT"
