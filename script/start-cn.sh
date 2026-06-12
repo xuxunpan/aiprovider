@@ -4,11 +4,18 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$SCRIPT_DIR/../backend-cn"
 cd "$APP_DIR"
 
-if [ ! -d "$APP_DIR/.venv" ]; then
-    echo "[init] creating virtual environment..."
-    python3.11 -m venv "$APP_DIR/.venv" || python3 -m venv "$APP_DIR/.venv"
+PID_FILE="$APP_DIR/uvicorn.pid"
+LOG_DIR="$APP_DIR/logs"
+LOG_FILE="$LOG_DIR/app.log"
+
+if [ ! -d "$APP_DIR/.venv" ] || [ ! -f "$APP_DIR/.venv/.deps_ok" ]; then
+    if [ ! -d "$APP_DIR/.venv" ]; then
+        echo "[init] creating virtual environment..."
+        python3.11 -m venv "$APP_DIR/.venv" || python3 -m venv "$APP_DIR/.venv"
+    fi
     echo "[init] installing dependencies..."
     "$APP_DIR/.venv/bin/python" -m pip install -q -r "$APP_DIR/requirements.txt"
+    touch "$APP_DIR/.venv/.deps_ok"
 fi
 
 if [ ! -f "$APP_DIR/.env" ]; then
@@ -30,5 +37,18 @@ set +a
 HOST="${APP_HOST:-0.0.0.0}"
 PORT="${APP_PORT:-8000}"
 
-echo "[start] backend-cn -> http://$HOST:$PORT"
-"$APP_DIR/.venv/bin/python" -m uvicorn app.main:app --host "$HOST" --port "$PORT"
+if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    if kill -0 "$PID" 2>/dev/null; then
+        echo "[warn] backend-cn is already running (pid=$PID)"
+        exit 1
+    fi
+    rm -f "$PID_FILE"
+fi
+
+mkdir -p "$LOG_DIR"
+
+echo "[start] backend-cn -> http://$HOST:$PORT (background)"
+nohup "$APP_DIR/.venv/bin/python" -m uvicorn app.main:app --host "$HOST" --port "$PORT" >> "$LOG_FILE" 2>&1 &
+echo $! > "$PID_FILE"
+echo "[start] pid=$(cat "$PID_FILE"), log=$LOG_FILE"
