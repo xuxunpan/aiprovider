@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { computed, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
-import { ArrowDown } from "@element-plus/icons-vue";
 import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();
 const router = useRouter();
+const route = useRoute();
+
+const activeTab = computed(() => {
+  if (route.path.startsWith("/account") || route.path.startsWith("/recharge")) return "account";
+  return "products";
+});
 
 onMounted(() => {
   if (auth.isAuthenticated && !auth.email) {
@@ -22,22 +27,25 @@ function onLogout() {
 </script>
 
 <template>
-  <el-header class="app-header">
-    <div class="brand" @click="router.push('/products')">AI 图片生成平台</div>
-    <div class="right">
+  <el-header class="app-header" height="56px">
+    <div class="header-left">
+      <span class="brand">AI生成电商产品推广图</span>
+      <div class="tabs">
+        <span
+          class="tab"
+          :class="{ active: activeTab === 'products' }"
+          @click="router.push('/products')"
+        >我的商品</span>
+        <span
+          class="tab"
+          :class="{ active: activeTab === 'account' }"
+          @click="router.push('/account')"
+        >我</span>
+      </div>
+    </div>
+    <div class="header-right">
       <el-tag type="warning" effect="dark" round>积分：{{ auth.credits }}</el-tag>
-      <el-dropdown trigger="click">
-        <el-button type="primary" plain>
-          菜单 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-        </el-button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item @click="router.push('/products')">产品生成</el-dropdown-item>
-            <el-dropdown-item @click="router.push('/account')">我</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-      <span class="email">{{ auth.email }}</span>
+      <span class="email" @click="router.push('/account')">{{ auth.email }}</span>
       <el-button text type="danger" @click="onLogout">退出</el-button>
     </div>
   </el-header>
@@ -49,21 +57,54 @@ function onLogout() {
   align-items: center;
   justify-content: space-between;
   background: #fff;
-  border-bottom: 1px solid #ebeef5;
-  padding: 0 20px;
+  border-bottom: 1px solid #e4e7ed;
+  padding: 0 24px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
-.brand {
-  font-size: 18px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.right {
+.header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 32px;
+}
+.brand {
+  font-size: 17px;
+  font-weight: 700;
+  color: #303133;
+  letter-spacing: 0.5px;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+.tab {
+  padding: 6px 16px;
+  font-size: 14px;
+  color: #606266;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.tab:hover {
+  color: #409eff;
+  background: #ecf5ff;
+}
+.tab.active {
+  color: #409eff;
+  background: #ecf5ff;
+  font-weight: 600;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 .email {
-  font-size: 14px;
-  color: #909399;
+  font-size: 13px;
+  color: #409eff;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.email:hover {
+  opacity: 0.8;
 }
 </style>
