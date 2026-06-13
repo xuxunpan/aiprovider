@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     storage_dir: str = "/storage"
 
+    mock_generate: bool = False
+
     log_level: str = "INFO"
 
 
