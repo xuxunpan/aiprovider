@@ -23,8 +23,9 @@ const loading = ref(false);
 const refBlobs = ref<Map<string, string>>(new Map());
 const targetBlobs = ref<Map<string, string>>(new Map());
 
-const newPrompt = ref("");
-const creating = ref(false);
+const showCreateDialog = ref(false);
+const dialogPrompt = ref("");
+const dialogCreating = ref(false);
 const editingTargetId = ref<string | null>(null);
 const regenPrompt = ref("");
 const regenerating = ref(false);
@@ -104,19 +105,25 @@ watch(
   { deep: true, immediate: true },
 );
 
-async function onCreate() {
-  if (!newPrompt.value.trim()) {
-    ElMessage.warning("请输入目标图提示词");
+function openCreateDialog() {
+  dialogPrompt.value = "";
+  showCreateDialog.value = true;
+}
+
+async function confirmCreate() {
+  if (!dialogPrompt.value.trim()) {
+    ElMessage.warning("请输入推广图提示词");
     return;
   }
-  creating.value = true;
+  dialogCreating.value = true;
   try {
-    await createTarget(productId.value, newPrompt.value.trim());
-    ElMessage.success("目标图已加入生成队列");
-    newPrompt.value = "";
+    await createTarget(productId.value, dialogPrompt.value.trim());
+    ElMessage.success("产品推广图已加入生成队列");
+    showCreateDialog.value = false;
+    dialogPrompt.value = "";
     await loadProduct();
   } finally {
-    creating.value = false;
+    dialogCreating.value = false;
   }
 }
 
@@ -219,38 +226,13 @@ const statusType: Record<string, string> = {
           </div>
         </el-card>
 
-        <!-- 新建目标图 -->
+        <!-- 产品推广图 -->
         <el-card class="section">
-          <template #header>新建目标图</template>
-          <div class="new-target-row">
-            <el-input
-              v-model="newPrompt"
-              type="textarea"
-              :rows="3"
-              maxlength="1000"
-              show-word-limit
-              placeholder="输入生成提示词，例如：更换背景为海滩日落"
-              class="prompt-input"
-            />
-            <div class="new-target-actions">
-              <span class="cost-hint">每次生成消耗 1 积分，当前剩余 {{ auth.credits }}</span>
-              <el-button
-                type="primary"
-                :icon="Plus"
-                :loading="creating"
-                :disabled="!newPrompt.trim() || auth.credits <= 0"
-                @click="onCreate"
-              >
-                创建目标图
-              </el-button>
-            </div>
+          <template #header>产品推广图 ({{ product.targets.length }})</template>
+          <div v-if="product.targets.length === 0" class="empty-target-area" @click="openCreateDialog">
+            <el-icon :size="40"><Plus /></el-icon>
+            <span>点击创建产品推广图</span>
           </div>
-        </el-card>
-
-        <!-- 目标图列表 -->
-        <el-card class="section">
-          <template #header>目标图 ({{ product.targets.length }})</template>
-          <el-empty v-if="product.targets.length === 0" description="暂无目标图，请在上方创建" />
           <div v-else class="target-grid">
             <el-card v-for="t in product.targets" :key="t.id" class="target-card" shadow="hover">
               <div class="target-img">
@@ -308,8 +290,35 @@ const statusType: Record<string, string> = {
                 </template>
               </div>
             </el-card>
+
+            <div class="add-target-card" @click="openCreateDialog">
+              <el-icon :size="32"><Plus /></el-icon>
+            </div>
           </div>
         </el-card>
+
+        <el-dialog v-model="showCreateDialog" title="新建产品推广图" width="500px">
+          <el-input
+            v-model="dialogPrompt"
+            type="textarea"
+            :rows="4"
+            maxlength="1000"
+            show-word-limit
+            placeholder="输入生成提示词，例如：更换背景为海滩日落"
+          />
+          <div class="dialog-cost">每次生成消耗 1 积分，当前剩余 {{ auth.credits }}</div>
+          <template #footer>
+            <el-button @click="showCreateDialog = false">取消</el-button>
+            <el-button
+              type="primary"
+              :loading="dialogCreating"
+              :disabled="!dialogPrompt.trim() || auth.credits <= 0"
+              @click="confirmCreate"
+            >
+              确认生成
+            </el-button>
+          </template>
+        </el-dialog>
       </template>
       <div v-else v-loading="loading" style="min-height:300px" />
     </el-main>
@@ -355,29 +364,53 @@ const statusType: Record<string, string> = {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.new-target-row {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-}
-.prompt-input {
-  flex: 1;
-}
-.new-target-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  white-space: nowrap;
-}
-.cost-hint {
-  font-size: 13px;
-  color: #909399;
-}
 .target-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
+}
+
+.empty-target-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 60px 20px;
+  border: 2px dashed #dcdfe6;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #c0c4cc;
+  transition: border-color 0.2s, color 0.2s;
+}
+.empty-target-area:hover {
+  border-color: #409eff;
+  color: #409eff;
+}
+.empty-target-area span {
+  font-size: 14px;
+}
+
+.add-target-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border: 2px dashed #dcdfe6;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #c0c4cc;
+  transition: border-color 0.2s, color 0.2s;
+}
+.add-target-card:hover {
+  border-color: #409eff;
+  color: #409eff;
+}
+
+.dialog-cost {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #909399;
 }
 .target-card {
   display: flex;
