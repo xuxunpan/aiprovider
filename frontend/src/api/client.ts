@@ -30,6 +30,8 @@ client.interceptors.response.use(
     } else if (status === 402) {
       ElMessage.warning(detail || "积分已用完，请充值后继续使用");
       router.push("/recharge");
+    } else if (status === 413) {
+      ElMessage.error("上传文件过大，请压缩图片后重试");
     } else if (detail) {
       ElMessage.error(detail);
     } else {
