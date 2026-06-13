@@ -58,12 +58,12 @@ async def create_target(
 async def claim_next_queued_target(
     db: AsyncIOMotorDatabase, user_id: ObjectId, max_concurrent: int
 ) -> dict | None:
-    """原子认领一个排队任务：检查用户进行中数量，<上限则取最早排队改为 generating。"""
-    generating_count = await db.targets.count_documents(
-        {"user_id": user_id, "status": "generating"}
-    )
-    if generating_count >= max_concurrent:
-        return None
+    """原子认领一个排队任务。
+
+    先通过 find_one_and_update 原子地将最早排队任务标记为 generating，
+    然后核验并发数是否超限——若超限立即回退为 queued。
+    在单进程调度下不会触发回退；多 worker 部署时起到安全兜底作用。
+    """
     result = await db.targets.find_one_and_update(
         {"user_id": user_id, "status": "queued"},
         {
@@ -74,8 +74,24 @@ async def claim_next_queued_target(
         },
         sort=[("created_at", 1)],
     )
-    if result:
-        logger.info("任务已认领: target_id=%s user_id=%s", result["_id"], user_id)
+    if not result:
+        return None
+
+    generating_count = await db.targets.count_documents(
+        {"user_id": user_id, "status": "generating"}
+    )
+    if generating_count > max_concurrent:
+        await db.targets.update_one(
+            {"_id": result["_id"]},
+            {"$set": {"status": "queued", "started_at": None}},
+        )
+        logger.warning(
+            "并发上限触发回退: user_id=%s target_id=%s count=%s",
+            user_id, result["_id"], generating_count,
+        )
+        return None
+
+    logger.info("任务已认领: target_id=%s user_id=%s", result["_id"], user_id)
     return result
 
 

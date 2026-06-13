@@ -62,7 +62,9 @@ async def _process_queue(db: AsyncIOMotorDatabase) -> None:
 
     max_con = settings.max_concurrent_generations
     for user_id in users_with_queued:
-        while True:
+        # 安全上限：单用户单轮最多尝试派发 2*max_con 个任务，
+        # 防止多 worker 回退导致的无限循环
+        for _ in range(max_con * 2):
             claimed = await cs.claim_next_queued_target(db, user_id, max_con)
             if claimed is None:
                 break
@@ -72,7 +74,12 @@ async def _process_queue(db: AsyncIOMotorDatabase) -> None:
 
 
 async def dispatcher_loop() -> None:
-    """主调度循环：定期扫描 MongoDB，认领排队任务并派生执行。"""
+    """主调度循环：定期扫描 MongoDB，认领排队任务并派生执行。
+
+    注意：调度器设计为单进程运行（uvicorn --workers=1，或每个 worker 独立调度）。
+    多 worker 部署时 claim_next_queued_target 内置回退机制保证并发上限不被突破，
+    但可能出现短暂超额认领→立即回退的抖动，建议使用单 worker 以获最佳调度效率。
+    """
     logger.info("任务调度器已启动, 最大并发=%s", settings.max_concurrent_generations)
     db = get_db()
 

@@ -1,20 +1,24 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import { ElMessage } from "element-plus";
-import { rechargePlaceholder, createRechargeRecord } from "@/api/credits";
+import { rechargePlaceholder, createRechargeRecord, getRechargePackages, type RechargePackage } from "@/api/credits";
 
 const loadingPlan = ref<string | null>(null);
+const plans = ref<RechargePackage[]>([]);
 
-const plans = [
-  { credits: 50, price: 9 },
-  { credits: 120, price: 19 },
-  { credits: 300, price: 39 },
-];
-
-async function onRecharge(plan: { credits: number; price: number }) {
-  loadingPlan.value = `${plan.credits}-${plan.price}`;
+onMounted(async () => {
   try {
-    await createRechargeRecord(plan.credits, plan.price);
+    const res = await getRechargePackages();
+    plans.value = res.packages;
+  } catch {
+    ElMessage.error("加载充值套餐失败");
+  }
+});
+
+async function onRecharge(plan: RechargePackage) {
+  loadingPlan.value = plan.id;
+  try {
+    await createRechargeRecord(plan.id);
     const res = await rechargePlaceholder();
     ElMessage.info(res.message);
   } finally {
@@ -36,12 +40,12 @@ async function onRecharge(plan: { credits: number; price: number }) {
           show-icon
         />
         <div class="plans">
-          <el-card v-for="p in plans" :key="p.credits" class="plan" shadow="hover">
+          <el-card v-for="p in plans" :key="p.id" class="plan" shadow="hover">
             <div class="credits">{{ p.credits }} 积分</div>
             <div class="price">&yen;{{ p.price }}</div>
             <el-button
               type="primary"
-              :loading="loadingPlan === `${p.credits}-${p.price}`"
+              :loading="loadingPlan === p.id"
               @click="onRecharge(p)"
             >
               立即充值

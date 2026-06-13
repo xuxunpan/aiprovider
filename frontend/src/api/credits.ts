@@ -8,6 +8,12 @@ export interface RechargeRecord {
   created_at: string;
 }
 
+export interface RechargePackage {
+  id: string;
+  credits: number;
+  price: number;
+}
+
 export async function getCredits(): Promise<{ credits: number }> {
   const { data } = await client.get("/credits");
   return data;
@@ -18,8 +24,13 @@ export async function getRechargeRecords(): Promise<{ records: RechargeRecord[] 
   return data;
 }
 
-export async function createRechargeRecord(amount: number, price: number): Promise<{ ok: boolean; record_id: string }> {
-  const { data } = await client.post("/credits/recharge/record", null, { params: { amount, price } });
+export async function getRechargePackages(): Promise<{ packages: RechargePackage[] }> {
+  const { data } = await client.get<{ packages: RechargePackage[] }>("/credits/recharge/packages");
+  return data;
+}
+
+export async function createRechargeRecord(packageId: string): Promise<{ ok: boolean; record_id: string }> {
+  const { data } = await client.post("/credits/recharge/record", { package_id: packageId });
   return data;
 }
 
