@@ -33,41 +33,73 @@ async def get_credits(db: AsyncIOMotorDatabase, user_id: ObjectId) -> int:
     return int(user.get("credits", 0)) if user else 0
 
 
-async def create_task(
-    db: AsyncIOMotorDatabase, user_id: ObjectId, prompt: str, cost: int
+# --- Targets (新数据模型) ---
+
+async def create_target(
+    db: AsyncIOMotorDatabase, product_id: ObjectId, user_id: ObjectId, prompt: str, cost: int
 ) -> ObjectId:
     doc = {
+        "product_id": product_id,
         "user_id": user_id,
         "prompt": prompt,
-        "status": "pending",
+        "status": "queued",
         "cost": cost,
-        "hk_image_path": None,
+        "cn_image_path": None,
         "error_msg": None,
         "created_at": datetime.now(timezone.utc),
+        "started_at": None,
         "finished_at": None,
     }
-    result = await db.tasks.insert_one(doc)
+    result = await db.targets.insert_one(doc)
+    logger.info("目标图已创建: target_id=%s product_id=%s", result.inserted_id, product_id)
     return result.inserted_id
 
 
-async def mark_task_success(
-    db: AsyncIOMotorDatabase, task_id: ObjectId, hk_image_path: str
+async def claim_next_queued_target(
+    db: AsyncIOMotorDatabase, user_id: ObjectId, max_concurrent: int
+) -> dict | None:
+    """原子认领一个排队任务：检查用户进行中数量，<上限则取最早排队改为 generating。"""
+    generating_count = await db.targets.count_documents(
+        {"user_id": user_id, "status": "generating"}
+    )
+    if generating_count >= max_concurrent:
+        return None
+    result = await db.targets.find_one_and_update(
+        {"user_id": user_id, "status": "queued"},
+        {
+            "$set": {
+                "status": "generating",
+                "started_at": datetime.now(timezone.utc),
+            }
+        },
+        sort=[("created_at", 1)],
+    )
+    if result:
+        logger.info("任务已认领: target_id=%s user_id=%s", result["_id"], user_id)
+    return result
+
+
+async def mark_target_success(
+    db: AsyncIOMotorDatabase, target_id: ObjectId, cn_image_path: str
 ) -> None:
-    await db.tasks.update_one(
-        {"_id": task_id},
+    await db.targets.update_one(
+        {"_id": target_id},
         {
             "$set": {
                 "status": "success",
-                "hk_image_path": hk_image_path,
+                "cn_image_path": cn_image_path,
                 "finished_at": datetime.now(timezone.utc),
             }
         },
     )
+    logger.info("目标图生成成功: target_id=%s", target_id)
 
 
-async def mark_task_failed(db: AsyncIOMotorDatabase, task_id: ObjectId, error_msg: str) -> None:
-    await db.tasks.update_one(
-        {"_id": task_id},
+async def mark_target_failed(
+    db: AsyncIOMotorDatabase, target_id: ObjectId, error_msg: str
+) -> None:
+    await db.targets.update_one(
+        {"_id": target_id},
         {
             "$set": {
                 "status": "failed",
@@ -76,3 +108,22 @@ async def mark_task_failed(db: AsyncIOMotorDatabase, task_id: ObjectId, error_ms
             }
         },
     )
+    logger.info("目标图生成失败: target_id=%s error=%s", target_id, error_msg)
+
+
+async def reset_stale_generating(db: AsyncIOMotorDatabase) -> int:
+    """启动时把残留的 generating 重置为 queued。"""
+    result = await db.targets.update_many(
+        {"status": "generating"},
+        {"$set": {"status": "queued", "started_at": None}},
+    )
+    logger.info("重置残留 generating 任务: count=%s", result.modified_count)
+    return result.modified_count
+
+
+async def count_user_concurrent(db: AsyncIOMotorDatabase, user_id: ObjectId) -> int:
+    return await db.targets.count_documents({"user_id": user_id, "status": "generating"})
+
+
+async def count_user_queued(db: AsyncIOMotorDatabase, user_id: ObjectId) -> int:
+    return await db.targets.count_documents({"user_id": user_id, "status": "queued"})

@@ -31,6 +31,12 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # 本地图片存储目录
+    cn_storage_dir: str = "./storage"
+
+    # 单用户同时进行中的生成任务上限
+    max_concurrent_generations: int = 5
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

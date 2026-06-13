@@ -1,29 +1,32 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { ElMessage } from "element-plus";
-import AppHeader from "@/components/AppHeader.vue";
-import { recharge } from "@/api/images";
+import { rechargePlaceholder, createRechargeRecord } from "@/api/credits";
 
-const loading = ref(false);
+const loadingPlan = ref<string | null>(null);
 
-async function onRecharge() {
-  loading.value = true;
+const plans = [
+  { credits: 50, price: 9 },
+  { credits: 120, price: 19 },
+  { credits: 300, price: 39 },
+];
+
+async function onRecharge(plan: { credits: number; price: number }) {
+  loadingPlan.value = `${plan.credits}-${plan.price}`;
   try {
-    const res = await recharge();
+    await createRechargeRecord(plan.credits, plan.price);
+    const res = await rechargePlaceholder();
     ElMessage.info(res.message);
-  } catch {
-    // 拦截器已处理
   } finally {
-    loading.value = false;
+    loadingPlan.value = null;
   }
 }
 </script>
 
 <template>
-  <el-container class="page">
-    <AppHeader />
-    <el-main>
-      <el-card class="card">
+  <div class="page">
+    <el-main class="main">
+      <el-card>
         <h2>积分充值</h2>
         <el-alert
           title="充值功能即将上线"
@@ -33,19 +36,21 @@ async function onRecharge() {
           show-icon
         />
         <div class="plans">
-          <el-card v-for="p in [
-            { credits: 50, price: 9 },
-            { credits: 120, price: 19 },
-            { credits: 300, price: 39 },
-          ]" :key="p.credits" class="plan" shadow="hover">
+          <el-card v-for="p in plans" :key="p.credits" class="plan" shadow="hover">
             <div class="credits">{{ p.credits }} 积分</div>
-            <div class="price">¥{{ p.price }}</div>
-            <el-button type="primary" :loading="loading" @click="onRecharge">立即充值</el-button>
+            <div class="price">&yen;{{ p.price }}</div>
+            <el-button
+              type="primary"
+              :loading="loadingPlan === `${p.credits}-${p.price}`"
+              @click="onRecharge(p)"
+            >
+              立即充值
+            </el-button>
           </el-card>
         </div>
       </el-card>
     </el-main>
-  </el-container>
+  </div>
 </template>
 
 <style scoped>
@@ -53,7 +58,7 @@ async function onRecharge() {
   min-height: 100vh;
   background: #f5f7fa;
 }
-.card {
+.main {
   max-width: 760px;
   margin: 0 auto;
 }

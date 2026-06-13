@@ -26,15 +26,22 @@ class OpenAIError(Exception):
     """OpenAI 调用失败。"""
 
 
-async def edit_image(prompt: str, image_bytes: bytes, filename: str) -> bytes:
-    """基于参考图 + 文字说明生成图片，返回图片字节(PNG)。"""
+async def edit_image(prompt: str, images: list[tuple[bytes, str]]) -> bytes:
+    """基于参考图 + 文字说明生成图片，返回图片字节(PNG)。
+
+    images: [(image_bytes, filename), ...] 多张参考图，仅使用第一张传递给 OpenAI。
+    """
     client = _get_client()
+    if not images:
+        raise OpenAIError("缺少参考图")
+
+    image_bytes, filename = images[0]
     image_file = io.BytesIO(image_bytes)
     image_file.name = filename or "input.png"
 
     logger.info(
-        "调用 OpenAI 图片编辑: model=%s size=%s prompt长度=%s",
-        settings.openai_image_model, settings.openai_image_size, len(prompt),
+        "调用 OpenAI 图片编辑: model=%s size=%s prompt长度=%s ref_count=%s",
+        settings.openai_image_model, settings.openai_image_size, len(prompt), len(images),
     )
     started = time.monotonic()
     try:
@@ -44,7 +51,7 @@ async def edit_image(prompt: str, image_bytes: bytes, filename: str) -> bytes:
             prompt=prompt,
             size=settings.openai_image_size,
         )
-    except Exception as exc:  # openai SDK 各类异常统一上抛
+    except Exception as exc:
         elapsed = time.monotonic() - started
         logger.error("OpenAI 调用异常: 耗时=%.2fs 错误=%s", elapsed, exc)
         raise OpenAIError(str(exc)) from exc

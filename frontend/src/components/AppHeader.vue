@@ -2,6 +2,7 @@
 import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
+import { ArrowDown } from "@element-plus/icons-vue";
 import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();
@@ -22,10 +23,20 @@ function onLogout() {
 
 <template>
   <el-header class="app-header">
-    <div class="brand" @click="router.push('/')">AI 图片生成平台</div>
+    <div class="brand" @click="router.push('/products')">AI 图片生成平台</div>
     <div class="right">
       <el-tag type="warning" effect="dark" round>积分：{{ auth.credits }}</el-tag>
-      <el-button text @click="router.push('/recharge')">充值</el-button>
+      <el-dropdown trigger="click">
+        <el-button type="primary" plain>
+          菜单 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item @click="router.push('/products')">产品生成</el-dropdown-item>
+            <el-dropdown-item @click="router.push('/account')">我</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <span class="email">{{ auth.email }}</span>
       <el-button text type="danger" @click="onLogout">退出</el-button>
     </div>
@@ -39,6 +50,7 @@ function onLogout() {
   justify-content: space-between;
   background: #fff;
   border-bottom: 1px solid #ebeef5;
+  padding: 0 20px;
 }
 .brand {
   font-size: 18px;

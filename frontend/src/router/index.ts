@@ -17,16 +17,27 @@ const router = createRouter({
       meta: { public: true },
     },
     {
-      path: "/",
-      name: "generate",
-      component: () => import("@/views/GenerateView.vue"),
+      path: "/products",
+      name: "products",
+      component: () => import("@/views/ProductsView.vue"),
+    },
+    {
+      path: "/products/:id",
+      name: "productDetail",
+      component: () => import("@/views/ProductDetailView.vue"),
+    },
+    {
+      path: "/account",
+      name: "account",
+      component: () => import("@/views/AccountView.vue"),
     },
     {
       path: "/recharge",
       name: "recharge",
       component: () => import("@/views/RechargeView.vue"),
     },
-    { path: "/:pathMatch(.*)*", redirect: "/" },
+    { path: "/", redirect: "/products" },
+    { path: "/:pathMatch(.*)*", redirect: "/products" },
   ],
 });
 
@@ -36,7 +47,7 @@ router.beforeEach((to) => {
     return { name: "login" };
   }
   if (to.meta.public && auth.isAuthenticated) {
-    return { name: "generate" };
+    return { name: "products" };
   }
   return true;
 });

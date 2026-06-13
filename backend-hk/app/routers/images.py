@@ -9,10 +9,14 @@ router = APIRouter(prefix="/internal", tags=["images"])
 logger = get_logger("images")
 
 
-@router.get("/images/{uid}/{filename}")
-async def get_image(uid: str, filename: str):
-    full = storage.resolve_path(f"{uid}/{filename}")
+@router.get("/images/{identifier}/{filename}")
+async def get_image(identifier: str, filename: str):
+    full = storage.resolve_path(f"{identifier}/{filename}")
     if full is None:
-        logger.warning("图片文件未找到: uid=%s filename=%s", uid, filename)
+        logger.warning("图片文件未找到: id=%s filename=%s", identifier, filename)
         raise HTTPException(status_code=404, detail="not found")
-    return FileResponse(full, media_type="image/png")
+
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "png"
+    media_map = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}
+    media_type = media_map.get(ext, "image/png")
+    return FileResponse(full, media_type=media_type)
