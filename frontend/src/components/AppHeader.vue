@@ -2,6 +2,7 @@
 import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
+import { User } from "@element-plus/icons-vue";
 import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();
@@ -30,7 +31,10 @@ function onLogout() {
     </div>
     <div class="header-right">
       <el-tag type="warning" effect="dark" round>积分：{{ auth.credits }}</el-tag>
-      <span class="email" @click="router.push('/account')">{{ auth.email }}</span>
+      <el-button text @click="router.push('/account')">
+        <el-icon><User /></el-icon>
+        {{ auth.email }}
+      </el-button>
       <el-button text type="danger" @click="onLogout">退出</el-button>
     </div>
   </el-header>
