@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     internal_secret: str = "change-me"
 
     openai_api_key: str = ""
+    openai_base_url: str = ""
     openai_image_model: str = "gpt-image-1"
     openai_image_size: str = "1024x1024"
 
