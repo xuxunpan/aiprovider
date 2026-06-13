@@ -109,12 +109,12 @@ async function onDelete(product: ProductListItem) {
   <div class="page">
     <el-main class="main">
       <div class="toolbar">
-        <h2>产品生成任务</h2>
-        <el-button type="primary" :icon="Plus" @click="showCreate = true">新建产品生成任务</el-button>
+        <h2>产品列表</h2>
+        <el-button type="primary" :icon="Plus" @click="showCreate = true">新建产品</el-button>
       </div>
 
       <div v-loading="loading" class="list">
-        <el-empty v-if="!loading && products.length === 0" description="暂无产品生成任务，点击上方按钮新建" />
+        <el-empty v-if="!loading && products.length === 0" description="暂无产品，点击上方按钮新建" />
         <el-card
           v-for="p in products"
           :key="p.id"
@@ -149,7 +149,7 @@ async function onDelete(product: ProductListItem) {
     </el-main>
 
     <!-- 新建产品对话框 -->
-    <el-dialog v-model="showCreate" title="新建产品生成任务" width="560px">
+    <el-dialog v-model="showCreate" title="新建产品" width="560px">
       <el-form label-position="top">
         <el-form-item label="产品名称" required>
           <el-input v-model="createName" placeholder="例如：春季新品海报" maxlength="60" show-word-limit />

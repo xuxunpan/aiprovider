@@ -1,17 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { onMounted } from "vue";
+import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();
 const router = useRouter();
-const route = useRoute();
-
-const activeTab = computed(() => {
-  if (route.path.startsWith("/account") || route.path.startsWith("/recharge")) return "account";
-  return "products";
-});
 
 onMounted(() => {
   if (auth.isAuthenticated && !auth.email) {
@@ -31,16 +25,7 @@ function onLogout() {
     <div class="header-left">
       <span class="brand">AI生成电商产品推广图</span>
       <div class="tabs">
-        <span
-          class="tab"
-          :class="{ active: activeTab === 'products' }"
-          @click="router.push('/products')"
-        >我的商品</span>
-        <span
-          class="tab"
-          :class="{ active: activeTab === 'account' }"
-          @click="router.push('/account')"
-        >我</span>
+        <span class="tab active" @click="router.push('/products')">我的产品</span>
       </div>
     </div>
     <div class="header-right">
