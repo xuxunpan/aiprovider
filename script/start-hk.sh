@@ -8,14 +8,18 @@ PID_FILE="$APP_DIR/uvicorn.pid"
 LOG_DIR="$APP_DIR/logs"
 LOG_FILE="$LOG_DIR/app.log"
 
-if [ ! -d "$APP_DIR/.venv" ] || [ ! -f "$APP_DIR/.venv/.deps_ok" ]; then
+# 自动检测并安装依赖（requirements.txt 内容变化时自动重装）
+CUR_HASH=$(md5sum "$APP_DIR/requirements.txt" | awk '{print $1}')
+OLD_HASH=""
+[ -f "$APP_DIR/.venv/.deps_hash" ] && OLD_HASH=$(cat "$APP_DIR/.venv/.deps_hash")
+if [ "$CUR_HASH" != "$OLD_HASH" ]; then
     if [ ! -d "$APP_DIR/.venv" ]; then
         echo "[init] creating virtual environment..."
         python3.11 -m venv "$APP_DIR/.venv" || python3 -m venv "$APP_DIR/.venv"
     fi
     echo "[init] installing dependencies..."
     "$APP_DIR/.venv/bin/python" -m pip install -q -r "$APP_DIR/requirements.txt"
-    touch "$APP_DIR/.venv/.deps_ok"
+    echo "$CUR_HASH" > "$APP_DIR/.venv/.deps_hash"
 fi
 
 if [ ! -f "$APP_DIR/.env" ]; then
