@@ -7,6 +7,12 @@ from openai import AsyncOpenAI
 from app.config import settings
 from app.logger import get_logger
 
+PROMPT_PREFIX = (
+    "【核心规则】\n"
+    "1. 忠实地保留产品原貌。不得改变、美化、创造或添加产品的形状、颜色、质地、材质、标记、比例或物理细节。\n"
+    "2. 所有文案均应基于产品可见特征和用户提供的信息。切勿捏造功能、材料、认证、容量、兼容性、产地。\n"
+)
+
 logger = get_logger("openai")
 
 _client: AsyncOpenAI | None = None
@@ -48,7 +54,7 @@ async def edit_image(prompt: str, images: list[tuple[bytes, str]]) -> bytes:
         result = await client.images.edit(
             model=settings.openai_image_model,
             image=image_file,
-            prompt=prompt,
+            prompt=f"{PROMPT_PREFIX}\n\n{prompt}",
             size=settings.openai_image_size,
         )
     except Exception as exc:
