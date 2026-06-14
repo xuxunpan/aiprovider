@@ -48,6 +48,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(credits.router)
+app.include_router(credits._notify_router)
 app.include_router(products.router)
 
 

@@ -14,6 +14,19 @@ export interface RechargePackage {
   price: number;
 }
 
+export interface RechargeResponse {
+  record_id: string;
+  code_url: string | null;
+  message: string | null;
+}
+
+export interface RechargeStatus {
+  record_id: string;
+  status: string;
+  amount_credits: number;
+  price: number;
+}
+
 export async function getCredits(): Promise<{ credits: number }> {
   const { data } = await client.get("/credits");
   return data;
@@ -26,6 +39,16 @@ export async function getRechargeRecords(): Promise<{ records: RechargeRecord[] 
 
 export async function getRechargePackages(): Promise<{ packages: RechargePackage[] }> {
   const { data } = await client.get<{ packages: RechargePackage[] }>("/credits/recharge/packages");
+  return data;
+}
+
+export async function createRecharge(packageId: string): Promise<RechargeResponse> {
+  const { data } = await client.post<RechargeResponse>("/credits/recharge", { package_id: packageId });
+  return data;
+}
+
+export async function getRechargeStatus(recordId: string): Promise<RechargeStatus> {
+  const { data } = await client.get<RechargeStatus>(`/credits/recharge/${recordId}/status`);
   return data;
 }
 

@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     # 单用户同时进行中的生成任务上限
     max_concurrent_generations: int = 5
 
+    # 微信支付(Native 支付)
+    wechat_app_id: str = ""
+    wechat_mch_id: str = ""
+    wechat_api_v3_key: str = ""
+    wechat_private_key_path: str = ""
+    wechat_cert_serial_no: str = ""
+    wechat_notify_url: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -72,6 +80,17 @@ class Settings(BaseSettings):
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def wechat_configured(self) -> bool:
+        return bool(
+            self.wechat_app_id
+            and self.wechat_mch_id
+            and self.wechat_api_v3_key
+            and self.wechat_private_key_path
+            and self.wechat_cert_serial_no
+            and self.wechat_notify_url
+        )
 
 
 @lru_cache

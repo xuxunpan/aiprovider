@@ -32,3 +32,18 @@ class CreateRechargeRecordRequest(BaseModel):
 class CreateRechargeRecordOut(BaseModel):
     ok: bool
     record_id: str
+
+
+class RechargeResponse(BaseModel):
+    """下单充值响应——含 record_id 与 code_url(微信已配置时)。"""
+    record_id: str
+    code_url: str | None = None
+    message: str | None = None
+
+
+class RechargeStatusOut(BaseModel):
+    """充值记录状态查询响应。"""
+    record_id: str
+    status: str
+    amount_credits: int
+    price: float
