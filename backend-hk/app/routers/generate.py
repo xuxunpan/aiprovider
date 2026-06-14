@@ -26,12 +26,8 @@ def _infer_ext(filename: str | None) -> str:
 async def generate(
     product_id: str = Form(...),
     prompt: str = Form(...),
-    images: List[UploadFile] = File(...),
+    images: List[UploadFile] = File(default=[]),
 ):
-    if not images:
-        logger.warning("生成请求被拒(无参考图): product_id=%s", product_id)
-        raise HTTPException(status_code=400, detail="empty images")
-
     ref_list: list[tuple[bytes, str]] = []
     for i, img in enumerate(images):
         img_bytes = await img.read()
@@ -46,6 +42,8 @@ async def generate(
                 product_id, len(ref_list), len(prompt))
 
     if settings.mock_generate:
+        if not ref_list:
+            raise HTTPException(status_code=400, detail="模拟生成需要至少一张参考图")
         logger.info("模拟生成: product_id=%s 等待 10s 后返回原图", product_id)
         await asyncio.sleep(10)
         result_bytes = ref_list[0][0]
