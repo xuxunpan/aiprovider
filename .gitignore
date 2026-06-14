@@ -8,6 +8,7 @@ __pycache__/
 # Node
 node_modules/
 dist/
+*.tsbuildinfo
 
 # 香港图片存储
 backend-hk/storage/
