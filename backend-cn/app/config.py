@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     hk_timeout_seconds: int = 120
 
     max_upload_mb: int = 10
+    max_image_dimension: int = 2000  # 上传图片宽高超此值自动等比缩放
 
     cors_origins: str = "http://localhost:5173"
 
@@ -45,6 +46,13 @@ class Settings(BaseSettings):
     enable_registration: bool = True
 
     # 微信支付(Native 支付)
+    # 以下全部留空时充值功能保持占位提示，配置后自动启用
+    # APP_ID: 微信公众号/小程序 AppID，在公众平台后台获取
+    # MCH_ID: 商户号(10位数字)，在商户平台→账户中心→商户信息查看
+    # API_V3_KEY: API v3 密钥(32位)，在商户平台设置，用于回调通知 AES-256-GCM 解密
+    # PRIVATE_KEY_PATH: 商户私钥 .pem 文件路径，用于签名 API 请求
+    # CERT_SERIAL_NO: 商户证书序列号(40位十六进制)，在商户平台→API安全→管理证书处查看
+    # NOTIFY_URL: 支付成功回调 URL，需 https 公网可达
     wechat_app_id: str = ""
     wechat_mch_id: str = ""
     wechat_api_v3_key: str = ""

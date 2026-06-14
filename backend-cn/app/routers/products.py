@@ -20,7 +20,7 @@ from app.schemas.product import (
     TargetOut,
 )
 from app.services import credit_service as cs
-from app.services import hk_client, storage
+from app.services import hk_client, image_utils, storage
 
 router = APIRouter(prefix="/api", tags=["products"])
 
@@ -83,6 +83,8 @@ async def create_product(
             raise HTTPException(status_code=400, detail="上传的图片为空")
         if len(img_bytes) > settings.max_upload_bytes:
             raise HTTPException(status_code=400, detail=f"图片大小不能超过 {settings.max_upload_mb}MB")
+
+        img_bytes = image_utils.resize_if_needed(img_bytes, settings.max_image_dimension)
 
         ext = _ext_from_content_type(img.content_type)
         filename = storage.save_ref_image(str(product_id), img_bytes, ext)
