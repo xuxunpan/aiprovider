@@ -17,6 +17,8 @@ WECHAT_API_BASE = "https://api.mch.weixin.qq.com"
 
 _private_key = None
 _platform_certs: dict[str, bytes] = {}
+_platform_certs_fetched_at: float = 0.0
+PLATFORM_CERT_TTL = 12 * 3600  # 平台证书刷新间隔(12小时)
 
 
 def _ensure_configured() -> bool:
@@ -66,9 +68,9 @@ def _build_auth_header(method: str, url_path: str, body: str) -> dict:
     }
 
 
-async def _download_platform_certs() -> dict[str, bytes]:
-    global _platform_certs
-    if _platform_certs:
+async def _download_platform_certs(force: bool = False) -> dict[str, bytes]:
+    global _platform_certs, _platform_certs_fetched_at
+    if not force and _platform_certs and (time.time() - _platform_certs_fetched_at < PLATFORM_CERT_TTL):
         return _platform_certs
 
     try:
@@ -88,6 +90,7 @@ async def _download_platform_certs() -> dict[str, bytes]:
                 raw["ciphertext"],
             )
             _platform_certs[serial_no] = plain.encode("utf-8")
+        _platform_certs_fetched_at = time.time()
         logger.info("平台证书已下载: 共 %d 个", len(_platform_certs))
     except Exception as e:
         logger.error("下载平台证书失败: %s", e)
@@ -158,8 +161,21 @@ async def verify_notify(
     if not _ensure_configured():
         return None
 
+    try:
+        ts = int(timestamp)
+        if abs(time.time() - ts) > 300:
+            logger.warning("回调时间戳偏差过大, 拒绝重放: timestamp=%s now=%s", timestamp, int(time.time()))
+            return None
+    except (ValueError, TypeError):
+        logger.warning("回调时间戳格式非法: %s", timestamp)
+        return None
+
     certs = await _download_platform_certs()
     cert_pem = certs.get(serial_no)
+    if cert_pem is None:
+        logger.warning("找不到序列号对应的平台证书, 尝试刷新: serial=%s", serial_no)
+        certs = await _download_platform_certs(force=True)
+        cert_pem = certs.get(serial_no)
     if cert_pem is None:
         logger.error("回调验签失败: 找不到序列号对应的平台证书 serial=%s", serial_no)
         return None
@@ -180,7 +196,11 @@ async def verify_notify(
         logger.error("回调验签异常: %s", e)
         return None
 
-    body = json.loads(body_bytes)
+    try:
+        body = json.loads(body_bytes)
+    except Exception as e:
+        logger.error("回调body JSON解析失败: %s", e)
+        return None
     resource = body.get("resource", {})
     if resource.get("algorithm") != "AEAD_AES_256_GCM":
         logger.error("回调加密算法不匹配: %s", resource.get("algorithm"))

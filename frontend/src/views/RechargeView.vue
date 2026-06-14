@@ -114,7 +114,7 @@ function startPolling() {
     } catch {
       // 轮询失败忽略，继续下次
     }
-  }, 2000);
+  }, 5000);
 }
 
 function onDialogClose() {

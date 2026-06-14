@@ -55,9 +55,18 @@ async def recharge(
     if not pkg:
         raise HTTPException(status_code=400, detail="无效的充值套餐")
 
+    if not settings.wechat_configured:
+        return RechargeResponse(
+            record_id="",
+            message="充值功能即将上线，敬请期待。如需更多积分请联系客服。",
+        )
+
     db = get_db()
 
     out_trade_no, code_url = await wechat_pay.create_native_order(pkg, str(user["_id"]))
+
+    if not code_url:
+        raise HTTPException(status_code=502, detail="下单失败，请稍后重试")
 
     doc = {
         "user_id": user["_id"],
@@ -79,13 +88,7 @@ async def recharge(
     logger.info("充值记录已创建: user_id=%s package=%s credits=%s price=%s out_trade_no=%s",
                 user["_id"], body.package_id, pkg["credits"], pkg["price"], out_trade_no)
 
-    if code_url:
-        return RechargeResponse(record_id=record_id, code_url=code_url)
-    else:
-        return RechargeResponse(
-            record_id=record_id,
-            message="充值功能即将上线，敬请期待。如需更多积分请联系客服。",
-        )
+    return RechargeResponse(record_id=record_id, code_url=code_url)
 
 
 @router.get("/recharge/packages", response_model=RechargePackagesOut)
@@ -118,18 +121,33 @@ async def get_recharge_status(
     if status == "pending":
         out_trade_no = doc.get("out_trade_no")
         if out_trade_no:
-            wechat_result = await wechat_pay.query_order(out_trade_no)
-            if wechat_result and wechat_result.get("trade_state") == "SUCCESS":
+            now = datetime.now(timezone.utc)
+            last_queried = doc.get("last_queried_at")
+            should_query = True
+            if last_queried:
+                if last_queried.tzinfo is None:
+                    last_queried = last_queried.replace(tzinfo=timezone.utc)
+                if (now - last_queried).total_seconds() < 5:
+                    should_query = False
+
+            if should_query:
+                wechat_result = await wechat_pay.query_order(out_trade_no)
                 await db.recharge_records.update_one(
-                    {"_id": oid, "status": "pending"},
-                    {"$set": {"status": "completed"}},
+                    {"_id": oid},
+                    {"$set": {"last_queried_at": now}},
                 )
-                await db.users.update_one(
-                    {"_id": doc["user_id"]},
-                    {"$inc": {"credits": amount_credits}},
-                )
-                status = "completed"
-                logger.info("轮询确认支付成功: record_id=%s credits=%s", record_id, amount_credits)
+                if wechat_result and wechat_result.get("trade_state") == "SUCCESS":
+                    result = await db.recharge_records.update_one(
+                        {"_id": oid, "credited": {"$ne": True}},
+                        {"$set": {"status": "completed", "credited": True}},
+                    )
+                    if result.modified_count == 1:
+                        await db.users.update_one(
+                            {"_id": doc["user_id"]},
+                            {"$inc": {"credits": amount_credits}},
+                        )
+                        logger.info("轮询确认支付成功: record_id=%s credits=%s", record_id, amount_credits)
+                    status = "completed"
 
     return RechargeStatusOut(
         record_id=record_id,
@@ -197,16 +215,12 @@ async def wechat_pay_notify(request: Request):
         logger.error("回调订单号未匹配到充值记录: out_trade_no=%s", out_trade_no)
         return {"code": "FAIL", "message": "订单不存在"}
 
-    if record.get("status") == "completed":
-        logger.info("回调重复通知(已处理): out_trade_no=%s", out_trade_no)
-        return {"code": "SUCCESS", "message": "已处理"}
-
     result = await db.recharge_records.update_one(
-        {"_id": record["_id"], "status": "pending", "out_trade_no": out_trade_no},
-        {"$set": {"status": "completed"}},
+        {"_id": record["_id"], "credited": {"$ne": True}},
+        {"$set": {"status": "completed", "credited": True}},
     )
     if result.modified_count == 0:
-        logger.warning("回调更新记录状态失败(可能已被处理): out_trade_no=%s", out_trade_no)
+        logger.info("回调重复或已被处理(积分已发放): out_trade_no=%s", out_trade_no)
         return {"code": "SUCCESS", "message": "已处理"}
 
     amount = record.get("amount_credits", 0)
