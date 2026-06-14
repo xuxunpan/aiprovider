@@ -4,6 +4,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$SCRIPT_DIR/../backend-hk"
 PID_FILE="$APP_DIR/uvicorn.pid"
 
+# 自动检测并安装依赖
+if [ ! -f "$APP_DIR/.venv/.deps_ok" ]; then
+    if [ ! -d "$APP_DIR/.venv" ]; then
+        echo "[restart] creating virtual environment..."
+        python3.11 -m venv "$APP_DIR/.venv" || python3 -m venv "$APP_DIR/.venv"
+    fi
+    echo "[restart] installing/updating dependencies..."
+    "$APP_DIR/.venv/bin/python" -m pip install -q -r "$APP_DIR/requirements.txt"
+    touch "$APP_DIR/.venv/.deps_ok"
+fi
+
 if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE")
     if kill -0 "$PID" 2>/dev/null; then
