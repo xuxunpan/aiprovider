@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # 单用户同时进行中的生成任务上限
     max_concurrent_generations: int = 5
 
+    # 是否允许新用户注册
+    enable_registration: bool = True
+
     # 微信支付(Native 支付)
     wechat_app_id: str = ""
     wechat_mch_id: str = ""

@@ -25,3 +25,8 @@ export async function fetchMe(): Promise<UserResponse> {
   const { data } = await client.get<UserResponse>("/auth/me");
   return data;
 }
+
+export async function checkRegistrationStatus(): Promise<{ enabled: boolean }> {
+  const { data } = await client.get<{ enabled: boolean }>("/auth/registration-status");
+  return data;
+}

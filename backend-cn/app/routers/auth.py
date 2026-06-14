@@ -13,8 +13,15 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = get_logger("auth")
 
 
+@router.get("/registration-status")
+async def registration_status():
+    return {"enabled": settings.enable_registration}
+
+
 @router.post("/register", response_model=TokenResponse)
 async def register(payload: RegisterRequest):
+    if not settings.enable_registration:
+        raise HTTPException(status_code=403, detail="注册功能已关闭，如有疑问请联系管理员")
     db = get_db()
     email = payload.email.lower()
     user_doc = {

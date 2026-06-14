@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { reactive, ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import type { FormInstance, FormRules } from "element-plus";
 import { useAuthStore } from "@/stores/auth";
+import { checkRegistrationStatus } from "@/api/auth";
 
 const router = useRouter();
 const auth = useAuthStore();
 const formRef = ref<FormInstance>();
 const loading = ref(false);
+const registrationEnabled = ref(true);
 
 const form = reactive({ email: "", password: "" });
 
@@ -36,6 +38,15 @@ async function onSubmit() {
     }
   });
 }
+
+onMounted(async () => {
+  try {
+    const { enabled } = await checkRegistrationStatus();
+    registrationEnabled.value = enabled;
+  } catch {
+    registrationEnabled.value = true;
+  }
+});
 </script>
 
 <template>
@@ -54,7 +65,8 @@ async function onSubmit() {
         </el-button>
       </el-form>
       <div class="foot">
-        还没有账号？<router-link to="/register">立即注册</router-link>
+        <template v-if="registrationEnabled">还没有账号？<router-link to="/register">立即注册</router-link></template>
+        <template v-else>&nbsp;</template>
       </div>
     </el-card>
   </div>
