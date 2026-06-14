@@ -60,15 +60,21 @@ async def edit_image(prompt: str, images: list[tuple[bytes, str]] | None = None)
         })
 
     logger.info(
-        "调用 OpenAI Responses API: model=%s prompt_len=%s ref_count=%s",
-        settings.openai_image_model, len(prompt), len(images),
+        "调用 OpenAI Responses API: model=%s image_model=%s size=%s prompt_len=%s ref_count=%s",
+        settings.openai_model, settings.openai_image_model,
+        settings.openai_image_size, len(prompt), len(images),
     )
     started = time.monotonic()
     try:
         response = await client.responses.create(
-            model=settings.openai_image_model,
+            model=settings.openai_model,
             instructions=PROMPT_PREFIX,
             input=[{"role": "user", "content": content}],
+            tools=[{
+                "type": "image_generation",
+                "model": settings.openai_image_model,
+                "size": settings.openai_image_size,
+            }],
         )
     except Exception as exc:
         elapsed = time.monotonic() - started

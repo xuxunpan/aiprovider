@@ -13,6 +13,9 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_base_url: str = ""
+    # Responses API 的多模态对话模型（如 gpt-4.1 / gpt-4o），由其通过 image_generation 工具生图
+    openai_model: str = "gpt-4.1"
+    # image_generation 工具内部使用的图像模型（gpt-image-1 / gpt-image-2）
     openai_image_model: str = "gpt-image-1"
     openai_image_size: str = "1024x1024"
 
