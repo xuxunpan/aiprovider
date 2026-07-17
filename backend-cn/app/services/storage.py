@@ -87,3 +87,47 @@ def delete_product_dir(product_id: str) -> None:
     if os.path.isdir(directory):
         shutil.rmtree(directory)
         logger.info("已删除产品目录: product_id=%s", product_id)
+
+
+# ── 聊天图片存储 ──────────────────────────────────────────────
+
+def _chat_dir(session_id: str) -> str:
+    safe = "".join(c for c in session_id if c.isalnum())
+    path = os.path.join(os.path.abspath(settings.cn_storage_dir), "chat", safe)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def save_chat_image(session_id: str, image_bytes: bytes, ext: str) -> str:
+    """保存聊天上传图，返回相对路径 chat/{safe_sid}/{uuid}.{ext}。"""
+    ext = ext.lower() if ext and ext.lower() in {"png", "jpg", "jpeg", "webp"} else "png"
+    directory = _chat_dir(session_id)
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    full_path = os.path.join(directory, filename)
+    with open(full_path, "wb") as f:
+        f.write(image_bytes)
+    safe_sid = "".join(c for c in session_id if c.isalnum())
+    rel_path = f"chat/{safe_sid}/{filename}"
+    logger.info("聊天图片已保存: path=%s size=%s", rel_path, len(image_bytes))
+    return rel_path
+
+
+def resolve_chat_path(rel_path: str) -> str | None:
+    """解析聊天图片相对路径为绝对路径，校验未越出存储根目录。"""
+    root = os.path.abspath(settings.cn_storage_dir)
+    full = os.path.abspath(os.path.join(root, rel_path))
+    if not full.startswith(root + os.sep) and full != root:
+        logger.warning("拦截路径穿越尝试(聊天): rel_path=%s", rel_path)
+        return None
+    if not os.path.isfile(full):
+        return None
+    return full
+
+
+def delete_chat_dir(session_id: str) -> None:
+    """删除会话的图片目录。"""
+    safe = "".join(c for c in session_id if c.isalnum())
+    directory = os.path.join(os.path.abspath(settings.cn_storage_dir), "chat", safe)
+    if os.path.isdir(directory):
+        shutil.rmtree(directory)
+        logger.info("已删除会话图片目录: session_id=%s", session_id)

@@ -23,6 +23,11 @@ class Settings(BaseSettings):
 
     mock_generate: bool = False
 
+    # Codex 会话相关
+    # 模型名：留空则用 SDK 默认；常见如 gpt-5.4
+    codex_model: str = ""
+    codex_reasoning_effort: str = "high"
+
     log_level: str = "INFO"
 
 

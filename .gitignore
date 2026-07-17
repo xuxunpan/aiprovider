@@ -12,6 +12,8 @@ dist/
 
 # 香港图片存储
 backend-hk/storage/
+# 国内图片存储
+backend-cn/storage/
 
 # IDE / OS
 .idea/

@@ -17,14 +17,9 @@ const router = createRouter({
       meta: { public: true },
     },
     {
-      path: "/products",
-      name: "products",
-      component: () => import("@/views/ProductsView.vue"),
-    },
-    {
-      path: "/products/:id",
-      name: "productDetail",
-      component: () => import("@/views/ProductDetailView.vue"),
+      path: "/chat",
+      name: "chat",
+      component: () => import("@/views/ChatView.vue"),
     },
     {
       path: "/account",
@@ -36,8 +31,11 @@ const router = createRouter({
       name: "recharge",
       component: () => import("@/views/RechargeView.vue"),
     },
-    { path: "/", redirect: "/products" },
-    { path: "/:pathMatch(.*)*", redirect: "/products" },
+    // 旧「我的产品」入口已下线，重定向到聊天页（视图文件保留不动）
+    { path: "/products", redirect: "/chat" },
+    { path: "/products/:id", redirect: "/chat" },
+    { path: "/", redirect: "/chat" },
+    { path: "/:pathMatch(.*)*", redirect: "/chat" },
   ],
 });
 
@@ -47,7 +45,7 @@ router.beforeEach((to) => {
     return { name: "login" };
   }
   if (to.meta.public && auth.isAuthenticated) {
-    return { name: "products" };
+    return { name: "chat" };
   }
   return true;
 });

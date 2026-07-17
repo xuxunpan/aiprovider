@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     # 积分参数(可配置)
     initial_credits: int = 20
     cost_per_image: int = 1
+    cost_per_chat: int = 1            # 每条聊天消息消耗积分
+    max_chat_images: int = 4          # 单条消息最多上传图片数
 
     # 充值套餐(后端权威定义，前端不可篡改金额)
     # 格式: "package_id:credits:price" 逗号分隔

@@ -97,3 +97,43 @@ npm run build    # 产物 dist/(含 vue-tsc 类型检查)
 - 报错文案中文放 `HTTPException.detail`；前端拦截器统一弹窗(401 跳登录，402 跳充值)。
 - 香港图片读取必须带内部密钥，禁止公网直接拉图。
 - 新增功能(尺寸/套餐/扣分)从 `config.py` 积分参数扩展，不硬编码。
+
+## 聊天会话功能 (Codex Web)
+
+主页为「我的会话」(`/chat`，`ChatView.vue`)，旧「我的产品」入口已下线(路由 `/products*` 重定向到 `/chat`，旧视图文件保留不动)。用户在 Web 端与香港机器上的 Codex 多轮对话，支持文本 + 最多 4 张图片，SSE 流式输出，按消息预扣积分。
+
+技术栈：香港用 `openai-codex` Python SDK（`AsyncCodex`），复用本机 `codex login` 的 ChatGPT 账号会话；每用户独立工作目录 `<STORAGE_DIR>/workspaces/<uid>/`，沙箱 `workspace_write`。
+
+### 新增文件
+- `backend-hk/app/services/codex_service.py`：`AsyncCodex` 单例、`start_thread`/`stream_turn`/`archive_thread`（延迟导入 SDK，未装时模块仍可 import）。
+- `backend-hk/app/services/workspace.py`：每用户工作区 + uploads 目录。
+- `backend-hk/app/routers/chat.py`：SSE 接口（`/internal/chat/sessions`、`/internal/chat/sessions/{tid}/messages`、`DELETE`）。
+- `backend-cn/app/schemas/chat.py`、`services/chat_service.py`（CRUD + 会话级并发锁）、`services/hk_chat_client.py`（流式代理香港 SSE）、`routers/chat.py`（`/api/chat/*`）。
+- `frontend/src/api/chat.ts`（会话 CRUD + `sendMessageStream` 用 fetch+ReadableStream 解析 SSE，绕过 axios）、`views/ChatView.vue`。
+
+### 数据模型 (MongoDB，新增)
+- **chat_sessions**: `_id, user_id, hk_thread_id, title, created_at, updated_at, last_message_at`
+- **chat_messages**: `_id, session_id, user_id, role(user/assistant), content, images[{path,filename}], status(success/failed), error_msg, usage, created_at`
+
+CN 为聊天历史唯一来源（不依赖 `thread.read`）。
+
+### API
+国内 `backend-cn` (前缀 `/api/chat`)：
+- `GET /sessions` 会话列表 ｜ `POST /sessions` 新建(调香港 `thread_start`)
+- `GET /sessions/{id}` 会话+历史消息 ｜ `DELETE /sessions/{id}` 删除(落库+香港归档+清工作区)
+- `POST /sessions/{id}/messages` 发消息(multipart `text`+≤`MAX_CHAT_IMAGES` 图)，预扣积分，返回 `text/event-stream`：`event: delta/done/error`
+- `GET /sessions/{id}/files/{filename}` 会话图片(鉴权+归属)
+
+香港 `backend-hk` (前缀 `/internal/chat`)：`POST /sessions`、`POST /sessions/{tid}/messages`(SSE)、`DELETE /sessions/{tid}`，全需 `X-Internal-Secret`。
+
+### 聊天流程 (POST /api/chat/sessions/{id}/messages)
+1. JWT 鉴权 + 校验会话归属。
+2. 校验图片格式/大小/数量、`text` 与图片至少一项非空。
+3. 会话级并发锁：同一会话上一条还在生成则返 409「上一条消息还在生成中」。
+4. 原子预扣 `COST_PER_CHAT`；不足 402。
+5. CN 落盘图片 + 存用户消息 → 调香港 SSE 流式 → 逐字转发前端。
+6. `done`：存助手消息(success)；`error`/异常：存 failed + 退还积分。
+
+### 配置 (新增)
+backend-cn: `COST_PER_CHAT`(默认1，0=免费) `MAX_CHAT_IMAGES`(默认4)
+backend-hk: `CODEX_MODEL`(留空用 SDK 默认) `CODEX_REASONING_EFFORT`(默认high)；依赖 `pip install openai-codex`，且须先在本机执行 `codex login`。

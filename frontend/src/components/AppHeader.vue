@@ -26,7 +26,7 @@ function onLogout() {
     <div class="header-left">
       <span class="brand">AI生成电商产品推广图</span>
       <div class="tabs">
-        <span class="tab active" @click="router.push('/products')">我的产品</span>
+        <span class="tab active" @click="router.push('/chat')">我的会话</span>
       </div>
     </div>
     <div class="header-right">
