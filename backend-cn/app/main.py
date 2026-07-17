@@ -11,7 +11,7 @@ from app.logger import get_logger, setup_logging
 setup_logging(settings.log_level)
 
 from app.db import close_db, connect_db
-from app.routers import auth, chat, credits, products
+from app.routers import admin, auth, chat, credits, products
 
 logger = get_logger("main")
 
@@ -47,6 +47,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(credits.router)
 app.include_router(credits._notify_router)
 app.include_router(products.router)

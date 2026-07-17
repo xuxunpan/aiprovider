@@ -5,6 +5,7 @@ interface AuthState {
   token: string | null;
   email: string | null;
   credits: number;
+  isAdmin: boolean;
 }
 
 export const useAuthStore = defineStore("auth", {
@@ -12,6 +13,7 @@ export const useAuthStore = defineStore("auth", {
     token: localStorage.getItem("token"),
     email: null,
     credits: 0,
+    isAdmin: false,
   }),
   getters: {
     isAuthenticated: (state) => !!state.token,
@@ -35,6 +37,7 @@ export const useAuthStore = defineStore("auth", {
       const me = await fetchMe();
       this.email = me.email;
       this.credits = me.credits;
+      this.isAdmin = me.is_admin;
     },
     setCredits(credits: number) {
       this.credits = credits;
@@ -43,6 +46,7 @@ export const useAuthStore = defineStore("auth", {
       this.token = null;
       this.email = null;
       this.credits = 0;
+      this.isAdmin = false;
       localStorage.removeItem("token");
     },
   },

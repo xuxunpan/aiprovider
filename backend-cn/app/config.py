@@ -44,8 +44,8 @@ class Settings(BaseSettings):
     # 单用户同时进行中的生成任务上限
     max_concurrent_generations: int = 5
 
-    # 是否允许新用户注册
-    enable_registration: bool = True
+    # 是否允许新用户注册(默认关闭，由管理员在后台添加用户)
+    enable_registration: bool = False
 
     # 微信支付(Native 支付)
     # 以下全部留空时充值功能保持占位提示，配置后自动启用

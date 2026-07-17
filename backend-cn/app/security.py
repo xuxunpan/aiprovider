@@ -7,6 +7,21 @@ from app.config import settings
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# 管理员邮箱名单(写死，不进配置)
+# 该名单内的邮箱自动具备管理员权限，且不可被删除
+ADMIN_EMAILS: frozenset[str] = frozenset(
+    {
+        "jifengbu000@163.com",
+        "jifengbu@163.com",
+        "sarahe6455@gmail.com",
+    }
+)
+
+
+def is_admin(email: str | None) -> bool:
+    """判断邮箱是否属于写死的管理员名单。"""
+    return bool(email) and email.lower() in ADMIN_EMAILS
+
 
 def hash_password(password: str) -> str:
     return _pwd_context.hash(password)

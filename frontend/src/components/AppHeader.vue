@@ -27,6 +27,7 @@ function onLogout() {
       <span class="brand">AI生成电商产品推广图</span>
       <div class="tabs">
         <span class="tab active" @click="router.push('/chat')">我的会话</span>
+        <span v-if="auth.isAdmin" class="tab" @click="router.push('/admin/users')">用户管理</span>
       </div>
     </div>
     <div class="header-right">

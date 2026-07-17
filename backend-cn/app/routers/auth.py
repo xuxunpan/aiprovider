@@ -5,8 +5,15 @@ from app.config import settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.logger import get_logger, mask_email
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
-from app.security import create_access_token, hash_password, verify_password
+from app.schemas.auth import (
+    ChangePasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserResponse,
+)
+from app.security import create_access_token, hash_password, is_admin, verify_password
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -29,6 +36,7 @@ async def register(payload: RegisterRequest):
         "password_hash": hash_password(payload.password),
         "credits": settings.initial_credits,
         "status": "active",
+        "created_at": datetime.now(timezone.utc),
     }
     try:
         result = await db.users.insert_one(user_doc)
@@ -62,4 +70,22 @@ async def login(payload: LoginRequest):
 
 @router.get("/me", response_model=UserResponse)
 async def me(user: dict = Depends(get_current_user)):
-    return UserResponse(id=str(user["_id"]), email=user["email"], credits=user.get("credits", 0))
+    return UserResponse(
+        id=str(user["_id"]),
+        email=user["email"],
+        credits=user.get("credits", 0),
+        is_admin=is_admin(user.get("email")),
+    )
+
+
+@router.post("/change-password")
+async def change_password(payload: ChangePasswordRequest, user: dict = Depends(get_current_user)):
+    """普通用户修改自己的密码：需校验原密码。"""
+    stored_hash = user.get("password_hash")
+    if not stored_hash or not verify_password(payload.old_password, stored_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="原密码错误")
+
+    new_hash = hash_password(payload.new_password)
+    await get_db().users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": new_hash}})
+    logger.info("用户修改密码成功: user_id=%s email=%s", user["_id"], mask_email(user.get("email", "")))
+    return {"ok": True}
