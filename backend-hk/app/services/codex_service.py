@@ -4,11 +4,19 @@
 SDK 会自动复用，无需在此处再次登录。
 """
 
+import asyncio
+import traceback
+
 from app.config import settings
 from app.logger import get_logger
 from app.services import workspace
 
 logger = get_logger("codex")
+
+# 流式保护：首个事件最长等待秒数；超过则视为 Codex 后端无响应并报错，避免前端永久转圈。
+FIRST_EVENT_TIMEOUT_S = 300.0
+# 相邻事件间最长间隔秒数；超过则视为流卡死并报错。
+IDLE_EVENT_TIMEOUT_S = 600.0
 
 # AsyncCodex 单例（在 lifespan 中初始化与关闭）。
 _codex = None
@@ -147,32 +155,158 @@ async def stream_turn(thread_id, user_id, text, image_paths):
         yield {"type": "rebuilt", "thread_id": thread.id}
 
     try:
+        logger.info(
+            "准备发起对话: thread_id=%s user_id=%s input_items=%d",
+            thread.id, user_id, len(input_items),
+        )
         turn = await thread.turn(input_items)
+        logger.info(
+            "对话已发起: thread_id=%s turn_id=%s 等待流式事件...",
+            thread.id, getattr(turn, "id", "?"),
+        )
     except Exception as exc:
-        logger.error("发起对话失败: thread_id=%s 错误=%s", thread.id, exc)
+        logger.error(
+            "发起对话失败: thread_id=%s 错误=%s\n%s",
+            thread.id, exc, traceback.format_exc(),
+        )
         yield {"type": "error", "detail": f"发起对话失败: {exc}"}
         return
 
     full_text_parts: list[str] = []
     usage: dict = {}
+    event_count = 0
     try:
-        async for event in turn.stream():
+        # 给 SDK 流加首事件/空闲超时保护，避免 next_turn_notification 永久阻塞。
+        stream_iter = turn.stream()
+
+        def _handle_event(event):
+            """处理一个事件，返回 (kind, value)。
+            kind: "delta" -> value=delta 文本；"usage" -> value=usage dict；
+                  "completed" -> 流结束；"error" -> value=错误信息(流终止)；
+                  "other" -> 忽略。
+            """
+            nonlocal usage
             method = getattr(event, "method", None)
             payload = getattr(event, "payload", None)
+            logger.info(
+                "收到事件: thread_id=%s turn_id=%s method=%s payload=%s",
+                thread.id, getattr(turn, "id", "?"), method,
+                payload,
+            )
+            # Codex 后端主动报错（配额超限、内部错误等）
+            if method == "error":
+                err = getattr(payload, "error", None) if payload else None
+                msg = getattr(err, "message", None) if err else None
+                detail = msg or str(payload) or "Codex 后端错误"
+                will_retry = getattr(err, "will_retry", False) if err else False
+                if will_retry:
+                    return ("other", None)
+                logger.error(
+                    "Codex 后端报错: thread_id=%s turn_id=%s 错误=%s",
+                    thread.id, getattr(turn, "id", "?"), detail,
+                )
+                return ("error", detail)
             if method == "item/agentMessage/delta":
                 delta = getattr(payload, "delta", None) if payload else None
                 if delta:
                     full_text_parts.append(delta)
-                    yield {"type": "delta", "text": delta}
-            elif method == "turn/completed":
+                    return ("delta", delta)
+                return ("other", None)
+            if method == "turn/completed":
                 turn_obj = getattr(payload, "turn", None) if payload else None
                 if turn_obj is not None:
+                    # 优先检查 turn.error（失败场景）
+                    turn_err = getattr(turn_obj, "error", None)
+                    if turn_err is not None:
+                        err_msg = (
+                            getattr(turn_err, "message", None)
+                            or str(turn_err)
+                            or "对话失败"
+                        )
+                        logger.error(
+                            "对话以失败结束: thread_id=%s turn_id=%s 错误=%s",
+                            thread.id, getattr(turn, "id", "?"), err_msg,
+                        )
+                        return ("error", err_msg)
                     u = getattr(turn_obj, "usage", None)
                     if u is not None:
                         usage = _usage_to_dict(u)
+                return ("completed", None)
+            return ("other", None)
+
+        try:
+            first_event = await asyncio.wait_for(
+                stream_iter.__anext__(), timeout=FIRST_EVENT_TIMEOUT_S
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "等待首事件超时(%ds)，Codex 后端无响应: thread_id=%s turn_id=%s",
+                int(FIRST_EVENT_TIMEOUT_S), thread.id, getattr(turn, "id", "?"),
+            )
+            yield {"type": "error", "detail": "Codex 后端无响应，请稍后重试"}
+            return
+        except StopAsyncIteration:
+            logger.error(
+                "流式迭代器立即结束(无事件): thread_id=%s turn_id=%s",
+                thread.id, getattr(turn, "id", "?"),
+            )
+            yield {"type": "error", "detail": "对话未产生任何输出"}
+            return
+
+        kind, value = _handle_event(first_event)
+        event_count += 1
+        if kind == "delta":
+            yield {"type": "delta", "text": value}
+        elif kind == "error":
+            yield {"type": "error", "detail": value}
+            return
+        elif kind == "completed":
+            logger.info(
+                "对话完成(首事件即结束): thread_id=%s turn_id=%s 总事件数=%d",
+                thread.id, getattr(turn, "id", "?"), event_count,
+            )
+            yield {"type": "done", "text": "".join(full_text_parts), "usage": usage}
+            return
+
+        while True:
+            try:
+                event = await asyncio.wait_for(
+                    stream_iter.__anext__(), timeout=IDLE_EVENT_TIMEOUT_S
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "等待事件空闲超时(%ds): thread_id=%s turn_id=%s 已收事件数=%d",
+                    int(IDLE_EVENT_TIMEOUT_S), thread.id,
+                    getattr(turn, "id", "?"), event_count,
+                )
+                yield {"type": "error", "detail": "对话生成超时，已退还积分"}
+                return
+            except StopAsyncIteration:
+                logger.info(
+                    "流式结束(迭代器终止): thread_id=%s turn_id=%s 总事件数=%d",
+                    thread.id, getattr(turn, "id", "?"), event_count,
+                )
+                break
+            event_count += 1
+            kind, value = _handle_event(event)
+            if kind == "delta":
+                yield {"type": "delta", "text": value}
+            elif kind == "error":
+                yield {"type": "error", "detail": value}
+                return
+            elif kind == "completed":
+                logger.info(
+                    "对话完成: thread_id=%s turn_id=%s 总事件数=%d",
+                    thread.id, getattr(turn, "id", "?"), event_count,
+                )
+                break
+
         yield {"type": "done", "text": "".join(full_text_parts), "usage": usage}
     except Exception as exc:
-        logger.error("流式读取对话失败: thread_id=%s 错误=%s", thread_id, exc)
+        logger.error(
+            "流式读取对话失败: thread_id=%s 错误=%s\n%s",
+            thread_id, exc, traceback.format_exc(),
+        )
         yield {"type": "error", "detail": f"对话生成失败: {exc}"}
 
 
