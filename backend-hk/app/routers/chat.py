@@ -75,6 +75,8 @@ async def send_message(
                 etype = evt.get("type")
                 if etype == "delta":
                     yield _sse("delta", {"text": evt.get("text", "")})
+                elif etype == "rebuilt":
+                    yield _sse("rebuilt", {"thread_id": evt.get("thread_id", "")})
                 elif etype == "done":
                     yield _sse("done", {"text": evt.get("text", ""), "usage": evt.get("usage", {})})
                 elif etype == "error":

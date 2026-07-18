@@ -99,9 +99,14 @@ async def stream_turn(thread_id, user_id, text, image_paths):
     """恢复会话并发起一轮对话，异步产出事件字典。
 
     产出的事件形如：
-      {"type": "delta", "text": "..."}        助手消息增量
-      {"type": "done", "text": "...", "usage": {...}}  本轮完成，附带最终文本与用量
-      {"type": "error", "detail": "..."}      失败
+      {"type": "delta", "text": "..."}                  助手消息增量
+      {"type": "rebuilt", "thread_id": "..."}            rollout 丢失，已新建 thread（调用方需回写）
+      {"type": "done", "text": "...", "usage": {...}}    本轮完成，附带最终文本与用量
+      {"type": "error", "detail": "..."}                 失败
+
+    说明：thread_resume 要求服务端已存在该 thread 的 rollout；新建 thread 在首轮对话
+    完成前没有 rollout，resume 会报 "no rollout found"。因此当 resume 失败时回退到
+    thread_start，用返回的 Thread 对象直接发起 turn，并通过 rebuilt 事件回传新 thread_id。
     """
     codex = _require_codex()
     cwd = workspace.workspace_dir(user_id)
@@ -110,17 +115,41 @@ async def stream_turn(thread_id, user_id, text, image_paths):
     for p in image_paths:
         input_items.append(_LocalImageInput(str(p)))
 
+    thread = None
     try:
         thread = await codex.thread_resume(thread_id, cwd=cwd)
     except Exception as exc:
-        logger.error("恢复会话失败: thread_id=%s 错误=%s", thread_id, exc)
-        yield {"type": "error", "detail": f"会话不可用: {exc}"}
-        return
+        if "no rollout found" not in str(exc).lower():
+            logger.error("恢复会话失败: thread_id=%s 错误=%s", thread_id, exc)
+            yield {"type": "error", "detail": f"会话不可用: {exc}"}
+            return
+        logger.warning(
+            "会话 rollout 丢失，回退新建: user_id=%s old_thread=%s 错误=%s",
+            user_id, thread_id, exc,
+        )
+        try:
+            thread = await codex.thread_start(
+                cwd=cwd,
+                sandbox=_Sandbox.workspace_write,
+                model=settings.codex_model or None,
+            )
+        except Exception as start_exc:
+            logger.error(
+                "回退新建会话也失败: user_id=%s old_thread=%s 错误=%s",
+                user_id, thread_id, start_exc,
+            )
+            yield {"type": "error", "detail": f"会话不可用: {exc}"}
+            return
+        logger.info(
+            "已重建会话: user_id=%s old_thread=%s new_thread=%s",
+            user_id, thread_id, thread.id,
+        )
+        yield {"type": "rebuilt", "thread_id": thread.id}
 
     try:
         turn = await thread.turn(input_items)
     except Exception as exc:
-        logger.error("发起对话失败: thread_id=%s 错误=%s", thread_id, exc)
+        logger.error("发起对话失败: thread_id=%s 错误=%s", thread.id, exc)
         yield {"type": "error", "detail": f"发起对话失败: {exc}"}
         return
 
