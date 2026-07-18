@@ -53,6 +53,21 @@ async def get_session(db: AsyncIOMotorDatabase, session_id: ObjectId, user_id: O
     return sess
 
 
+async def update_session_thread(
+    db: AsyncIOMotorDatabase, session_id: ObjectId, hk_thread_id: str
+) -> None:
+    """更新会话的 hk_thread_id（Codex rollout 丢失后自动重建会话时调用）。"""
+    now = datetime.now(timezone.utc)
+    await db.chat_sessions.update_one(
+        {"_id": session_id},
+        {"$set": {"hk_thread_id": hk_thread_id, "updated_at": now}},
+    )
+    logger.info(
+        "会话 hk_thread_id 已更新: session_id=%s new_thread_id=%s",
+        session_id, hk_thread_id,
+    )
+
+
 async def list_sessions(db: AsyncIOMotorDatabase, user_id: ObjectId) -> list[dict]:
     cursor = db.chat_sessions.find({"user_id": user_id}).sort("last_message_at", -1)
     return [doc async for doc in cursor]

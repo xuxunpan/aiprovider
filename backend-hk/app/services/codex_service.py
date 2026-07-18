@@ -26,7 +26,7 @@ async def init_codex() -> None:
     """启动时初始化 AsyncCodex 单例。延迟导入以便未安装 SDK 时模块仍可导入。"""
     global _codex, _AsyncCodex, _Sandbox, _TextInput, _LocalImageInput
     try:
-        from openai_codex import AsyncCodex, LocalImageInput, Sandbox, TextInput
+        from openai_codex import AsyncCodex, CodexConfig, LocalImageInput, Sandbox, TextInput
     except ImportError as exc:
         logger.error("未安装 openai-codex SDK: %s", exc)
         raise RuntimeError(
@@ -35,7 +35,20 @@ async def init_codex() -> None:
     _AsyncCodex, _Sandbox, _TextInput, _LocalImageInput = (
         AsyncCodex, Sandbox, TextInput, LocalImageInput,
     )
-    _codex = AsyncCodex()
+
+    env_overrides: dict[str, str] | None = None
+    if settings.codex_proxy:
+        proxy = settings.codex_proxy
+        env_overrides = {
+            "http_proxy": proxy,
+            "https_proxy": proxy,
+            "HTTP_PROXY": proxy,
+            "HTTPS_PROXY": proxy,
+        }
+        logger.info("Codex 启用代理: %s", proxy)
+
+    config = CodexConfig(env=env_overrides)
+    _codex = AsyncCodex(config=config)
     logger.info("Codex 单例已初始化")
 
 

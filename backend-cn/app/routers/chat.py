@@ -76,6 +76,11 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _is_rollout_missing(detail: str) -> bool:
+    """判断是否为 Codex 会话 rollout 丢失导致的可重建错误。"""
+    return "no rollout found" in detail.lower()
+
+
 # ── 会话 CRUD ──────────────────────────────────────────────
 
 @router.get("/sessions", response_model=ChatSessionListOut)
@@ -200,20 +205,61 @@ async def send_message(
             usage: dict = {}
             errored = False
             error_detail = ""
+            current_thread_id = thread_id
+            retried = False
             try:
-                async for evt in hk_chat_client.stream_message(thread_id, uid, text, hk_images):
-                    etype = evt.get("type")
-                    if etype == "delta":
-                        delta_parts.append(evt.get("text", ""))
-                        yield _sse("delta", {"text": evt.get("text", "")})
-                    elif etype == "done":
-                        final_text = evt.get("text", "")
-                        usage = evt.get("usage", {})
-                        yield _sse("done", {"text": final_text, "usage": usage})
-                    elif etype == "error":
-                        errored = True
-                        error_detail = evt.get("detail", "未知错误")
-                        yield _sse("error", {"detail": error_detail})
+                for _attempt in range(2):
+                    attempt_rebuild = False
+                    async for evt in hk_chat_client.stream_message(
+                        current_thread_id, uid, text, hk_images
+                    ):
+                        etype = evt.get("type")
+                        if etype == "delta":
+                            delta_parts.append(evt.get("text", ""))
+                            yield _sse("delta", {"text": evt.get("text", "")})
+                        elif etype == "done":
+                            final_text = evt.get("text", "")
+                            usage = evt.get("usage", {})
+                            yield _sse("done", {"text": final_text, "usage": usage})
+                        elif etype == "error":
+                            detail = evt.get("detail", "未知错误")
+                            if not retried and _is_rollout_missing(detail):
+                                # Codex rollout 丢失：重建会话后重试一次
+                                retried = True
+                                attempt_rebuild = True
+                                logger.warning(
+                                    "会话 rollout 丢失，自动重建: session_id=%s old_thread=%s",
+                                    session_id, current_thread_id,
+                                )
+                                try:
+                                    new_thread_id = await hk_chat_client.create_session(uid)
+                                    await chat_service.update_session_thread(
+                                        db, sid_obj, new_thread_id
+                                    )
+                                    current_thread_id = new_thread_id
+                                    logger.info(
+                                        "会话已重建，即将重试: session_id=%s new_thread=%s",
+                                        session_id, current_thread_id,
+                                    )
+                                    delta_parts.clear()
+                                    final_text = ""
+                                    usage = {}
+                                except Exception as rebuild_exc:
+                                    logger.error(
+                                        "重建会话失败，回退为错误: session_id=%s 错误=%s",
+                                        session_id, rebuild_exc,
+                                    )
+                                    attempt_rebuild = False
+                                    errored = True
+                                    error_detail = "会话状态已失效且重建失败，请新建会话"
+                                    yield _sse("error", {"detail": error_detail})
+                            else:
+                                errored = True
+                                error_detail = detail
+                                yield _sse("error", {"detail": detail})
+                            break
+                    if not attempt_rebuild:
+                        break
             except Exception as exc:
                 logger.exception("流式消息异常: session_id=%s", session_id)
                 errored = True

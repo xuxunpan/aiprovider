@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     # 模型名：留空则用 SDK 默认；常见如 gpt-5.4
     codex_model: str = ""
     codex_reasoning_effort: str = "high"
+    # Codex 出站代理（访问 OpenAI 时走代理）；留空则不走代理
+    codex_proxy: str = ""
 
     log_level: str = "INFO"
 
